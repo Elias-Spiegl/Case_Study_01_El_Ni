@@ -13,17 +13,12 @@ if choice == "Startseite":
     st.subheader("Willkommen im Admin-Dashboard")
     st.write("Wählen Sie einen Bereich aus dem Menü links.")
 
-
-
-
-
-
 # Initialisierung von Platzhalter-Daten im Session State (wie im Bild gefordert)
 if 'devices' not in st.session_state:
     # Feste Platzhalter-Werte basierend auf den Attributen aus PDF 04_02 [cite: 138, 139]
     st.session_state.devices = [
-        {"id": "INV-001", "name": "3D-Drucker Prusa", "responsible": "Max Mustermann"},
-        {"id": "INV-002", "name": "Laser Cutter", "responsible": "Erika Musterfrau"},
+        {"id": "INV-001", "name": "3D-Drucker Prusa", "responsible": "Elias Mustermann"},
+        {"id": "INV-002", "name": "Laser Cutter", "responsible": "Nico Mustermann"},
     ]
 
 if 'users' not in st.session_state:
@@ -32,10 +27,6 @@ if 'users' not in st.session_state:
         {"email": "max@hs.edu", "name": "Max Mustermann"},
         {"email": "erika@hs.edu", "name": "Erika Musterfrau"}
     ]
-
-
-
-
 
 
     # UI für Geräte-Verwaltung
