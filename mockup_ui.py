@@ -1,59 +1,158 @@
 import streamlit as st
+import pandas as pd
+from datetime import datetime
 
-# Seitentitel
-st.set_page_config(page_title="Geräte-Verwaltung Case Study I")
-st.title("Geräte-Verwaltung Hochschule")
+# -----------------------------------------------------------------------------
+# 1. SESSION STATE INITIALISIERUNG (Platzhalter-Daten)
+# Wie im Aufgaben-Bild gefordert, nutzen wir Session State für Dummy-Daten.
+# -----------------------------------------------------------------------------
 
-# Navigation (Struktur der App nachbauen laut Bild)
-menu = ["Startseite", "Geräte-Verwaltung", "Nutzer-Verwaltung", "Reservierungssystem", "Wartungs-Management"]
-choice = st.sidebar.selectbox("Menü", menu)
-
-# Begrüßung auf der Startseite
-if choice == "Startseite":
-    st.subheader("Willkommen im Admin-Dashboard")
-    st.write("Wählen Sie einen Bereich aus dem Menü links.")
-
-# Initialisierung von Platzhalter-Daten im Session State (wie im Bild gefordert)
-if 'devices' not in st.session_state:
-    # Feste Platzhalter-Werte basierend auf den Attributen aus PDF 04_02 [cite: 138, 139]
-    st.session_state.devices = [
-        {"id": "INV-001", "name": "3D-Drucker Prusa", "responsible": "Elias Mustermann"},
-        {"id": "INV-002", "name": "Laser Cutter", "responsible": "Nico Mustermann"},
-    ]
-
+# Initialisiere Nutzer-Daten (Attribute laut PDF 04_02, Seite 7)
 if 'users' not in st.session_state:
-    # Platzhalter für Nutzer (Attribute: id/email, name) [cite: 114, 115]
     st.session_state.users = [
-        {"email": "max@hs.edu", "name": "Max Mustermann"},
-        {"email": "erika@hs.edu", "name": "Erika Musterfrau"}
+        {"email": "max.mustermann@hs.edu", "name": "Max Mustermann"},
+        {"email": "julia.student@hs.edu", "name": "Julia Student"},
     ]
 
+# Initialisiere Geräte-Daten (Attribute laut PDF 04_02, Seite 10)
+if 'devices' not in st.session_state:
+    st.session_state.devices = [
+        {
+            "id": "INV-001", 
+            "name": "3D-Drucker Prusa MK3", 
+            "responsible_person": "max.mustermann@hs.edu",
+            "next_maintenance": "2024-01-15",
+            "maintenance_cost": 50.0
+        },
+        {
+            "id": "INV-002", 
+            "name": "Laser Cutter Epilog", 
+            "responsible_person": "max.mustermann@hs.edu",
+            "next_maintenance": "2024-02-01",
+            "maintenance_cost": 120.0
+        },
+    ]
 
-    # UI für Geräte-Verwaltung
-if choice == "Geräte-Verwaltung":
-    st.subheader("Geräte verwalten")
+# -----------------------------------------------------------------------------
+# 2. SEITEN-KONFIGURATION & NAVIGATION
+# Strukturierung der 4 Use-Cases laut PDF 04_02
+# -----------------------------------------------------------------------------
 
-    # 1. Bestehende Geräte anzeigen (liest aus unserem Platzhalter-State)
-    st.write("### Aktuelle Geräteliste")
-    st.table(st.session_state.devices)
+st.set_page_config(page_title="Geräte-Verwaltung Case Study I", layout="wide")
+
+st.sidebar.title("Navigation")
+menu_options = [
+    "Startseite", 
+    "Geräte-Verwaltung", 
+    "Nutzer-Verwaltung", 
+    "Reservierungssystem", 
+    "Wartungs-Management"
+]
+choice = st.sidebar.radio("Menü wählen:", menu_options)
+
+# -----------------------------------------------------------------------------
+# 3. IMPLEMENTIERUNG DER UI-MOCKUPS
+# -----------------------------------------------------------------------------
+
+# --- STARTSEITE ---
+if choice == "Startseite":
+    st.title("Admin-Dashboard Hochschule")
+    st.info("Willkommen im Mockup der Geräte-Verwaltung.")
+    st.write("Wählen Sie links einen Bereich aus, um die UI zu testen.")
+
+# --- GERÄTE-VERWALTUNG ---
+elif choice == "Geräte-Verwaltung":
+    st.title("🛠️ Geräte-Verwaltung")
     
-    st.divider()
-
-    # 2. Mockup für "Gerät anlegen" [cite: 91]
-    st.write("### Neues Gerät anlegen")
+    tab1, tab2 = st.tabs(["Geräteübersicht", "Neues Gerät anlegen"])
     
-    # Input-Felder basierend auf den Attributen im PDF 
-    col1, col2 = st.columns(2)
+    with tab1:
+        st.subheader("Aktuelle Inventarliste")
+        # Umwandlung in DataFrame für schönere Darstellung
+        if st.session_state.devices:
+            df_devices = pd.DataFrame(st.session_state.devices)
+            st.dataframe(df_devices, use_container_width=True)
+        else:
+            st.write("Keine Geräte vorhanden.")
+
+    with tab2:
+        st.subheader("Gerät hinzufügen (Mockup)")
+        with st.form("new_device_form"):
+            col1, col2 = st.columns(2)
+            with col1:
+                new_id = st.text_input("Inventarnummer (ID)")
+                new_name = st.text_input("Gerätename")
+            with col2:
+                # Dropdown basierend auf den Nutzern im Session State
+                user_options = [u['email'] for u in st.session_state.users]
+                new_resp = st.selectbox("Verantwortliche Person", user_options)
+                new_cost = st.number_input("Wartungskosten (€)", min_value=0.0)
+            
+            submitted = st.form_submit_button("Gerät speichern")
+            
+            if submitted:
+                # Hier simulieren wir das Speichern (nur im Session State)
+                new_device = {
+                    "id": new_id,
+                    "name": new_name,
+                    "responsible_person": new_resp,
+                    "next_maintenance": str(datetime.now().date()), # Dummy Datum
+                    "maintenance_cost": new_cost
+                }
+                st.session_state.devices.append(new_device)
+                st.success(f"Gerät '{new_name}' wurde simuliert gespeichert!")
+                st.rerun() # Lädt die Seite neu, damit die Tabelle aktualisiert wird
+
+# --- NUTZER-VERWALTUNG ---
+elif choice == "Nutzer-Verwaltung":
+    st.title("👥 Nutzer-Verwaltung")
+    
+    col1, col2 = st.columns([2, 1])
+    
     with col1:
-        new_id = st.text_input("Inventarnummer (ID)")
-        new_name = st.text_input("Gerätename")
+        st.subheader("Registrierte Nutzer")
+        st.table(st.session_state.users)
+        
     with col2:
-        # Hier nutzen wir die Nutzer-Platzhalter für die Dropdown-Liste
-        user_list = [u['name'] for u in st.session_state.users]
-        responsible = st.selectbox("Verantwortliche Person", user_list)
-        maintenance_cost = st.number_input("Wartungskosten (€)", min_value=0.0, step=10.0)
+        st.subheader("Nutzer anlegen")
+        with st.form("user_form"):
+            u_name = st.text_input("Name")
+            u_email = st.text_input("E-Mail (ID)")
+            
+            if st.form_submit_button("Nutzer anlegen"):
+                st.session_state.users.append({"email": u_email, "name": u_name})
+                st.success("Nutzer hinzugefügt!")
+                st.rerun()
 
-    # Button ohne komplexe Logik (nur UI-Struktur)
-    if st.button("Gerät speichern"):
-        st.success(f"Gerät '{new_name}' wurde (simuliert) gespeichert!")
-        # Optional: Hier könnte man später die Liste in st.session_state.devices erweitern
+# --- RESERVIERUNGSSYSTEM ---
+elif choice == "Reservierungssystem":
+    st.title("📅 Reservierungssystem")
+    st.warning("Hinweis: Dies ist nur ein UI-Entwurf.")
+    
+    # Auswahl der Objekte aus den Platzhalter-Daten
+    device_names = [d['name'] for d in st.session_state.devices]
+    user_names = [u['name'] for u in st.session_state.users]
+    
+    c1, c2 = st.columns(2)
+    with c1:
+        st.selectbox("Gerät wählen", device_names)
+        st.date_input("Startdatum")
+    with c2:
+        st.selectbox("Nutzer wählen", user_names)
+        st.date_input("Enddatum")
+        
+    st.button("Reservierung prüfen & buchen")
+
+# --- WARTUNGS-MANAGEMENT ---
+elif choice == "Wartungs-Management":
+    st.title("🔧 Wartungs-Management")
+    
+    # Einfache Berechnung basierend auf den Platzhalter-Daten
+    total_cost = sum(d['maintenance_cost'] for d in st.session_state.devices)
+    
+    st.metric(label="Geschätzte Wartungskosten (Quartal)", value=f"{total_cost} €")
+    
+    st.subheader("Anstehende Wartungen")
+    # Zeige nur Geräte an, die wir im State haben
+    for dev in st.session_state.devices:
+        st.write(f"**{dev['name']}**: Nächste Wartung am {dev.get('next_maintenance', 'Unbekannt')}")
