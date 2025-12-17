@@ -3,9 +3,14 @@ import pandas as pd
 from datetime import datetime
 
 # -----------------------------------------------------------------------------
-# 1. SESSION STATE INITIALISIERUNG (Platzhalter-Daten)
-# Wie im Aufgaben-Bild gefordert, nutzen wir Session State für Dummy-Daten.
+# 1. SESSION STATE INITIALISIERUNG ("Fake-Daten")
 # -----------------------------------------------------------------------------
+
+# Alle zu speichernden Variablen werden in diesem Abschnitt initialisiert
+# Sie werden alleridnsg nicht in einer Datenbank gespeichert sonder
+# im Session_state abgelegt (Temporärer speicher in streamlit)
+# vergleichbar mit einem py Dictionary...
+
 
 # Initialisiere Nutzer-Daten (Attribute laut PDF 04_02, Seite 7)
 if 'users' not in st.session_state:
@@ -14,7 +19,8 @@ if 'users' not in st.session_state:
         {"email": "julia.student@hs.edu", "name": "Julia Student"},
     ]
 
-# Initialisiere Geräte-Daten (Attribute laut PDF 04_02, Seite 10)
+# Initialisiere Geräte-Daten
+
 if 'devices' not in st.session_state:
     st.session_state.devices = [
         {
@@ -35,7 +41,7 @@ if 'devices' not in st.session_state:
 
 # -----------------------------------------------------------------------------
 # 2. SEITEN-KONFIGURATION & NAVIGATION
-# Strukturierung der 4 Use-Cases laut PDF 04_02
+# Strukturierung der 4 Use-Cases in einer Seitenleiste
 # -----------------------------------------------------------------------------
 
 st.set_page_config(page_title="Geräte-Verwaltung Case Study I", layout="wide")
@@ -51,7 +57,7 @@ menu_options = [
 choice = st.sidebar.radio("Menü wählen:", menu_options)
 
 # -----------------------------------------------------------------------------
-# 3. IMPLEMENTIERUNG DER UI-MOCKUPS
+# 3. IMPLEMENTIERUNG DES UI-MOCKUPS
 # -----------------------------------------------------------------------------
 
 # --- STARTSEITE ---
@@ -101,7 +107,8 @@ elif choice == "Geräte-Verwaltung":
                 }
                 st.session_state.devices.append(new_device)
                 st.success(f"Gerät '{new_name}' wurde simuliert gespeichert!")
-                st.rerun() # Lädt die Seite neu, damit die Tabelle aktualisiert wird
+                st.rerun() # Lädt die Seite neu, damit die Tabelle aktualisiert wird (
+                           # Session_Stat ebelibt natürlich erhalten)
 
 # --- NUTZER-VERWALTUNG ---
 elif choice == "Nutzer-Verwaltung":
@@ -126,13 +133,14 @@ elif choice == "Nutzer-Verwaltung":
 
 # --- RESERVIERUNGSSYSTEM ---
 elif choice == "Reservierungssystem":
+
     st.title("📅 Reservierungssystem")
     st.warning("Hinweis: Dies ist nur ein UI-Entwurf.")
     
     # Auswahl der Objekte aus den Platzhalter-Daten
     device_names = [d['name'] for d in st.session_state.devices]
     user_names = [u['name'] for u in st.session_state.users]
-    
+
     c1, c2 = st.columns(2)
     with c1:
         st.selectbox("Gerät wählen", device_names)
@@ -145,10 +153,11 @@ elif choice == "Reservierungssystem":
 
 # --- WARTUNGS-MANAGEMENT ---
 elif choice == "Wartungs-Management":
+
     st.title("🔧 Wartungs-Management")
     
     # Einfache Berechnung basierend auf den Platzhalter-Daten
-    total_cost = sum(d['maintenance_cost'] for d in st.session_state.devices)
+    total_cost = sum(d['maintenance_cost'] for d in st.session_state.devices) # Wartungskosten aufsummieren
     
     st.metric(label="Geschätzte Wartungskosten (Quartal)", value=f"{total_cost} €")
     
