@@ -1,0 +1,16 @@
+[
+  {
+    "id": "001",
+    "name": "3D-Drucker von Elias",
+    "responsible_person": "eliasspiegl@gmail.com",
+    "next_maintenance": "2026-01-07",
+    "maintenance_cost": 5.0
+  },
+  {
+    "id": "002",
+    "name": "3D-Drucker von Nico",
+    "responsible_person": "nicod\u00f6rr@gmail.com",
+    "next_maintenance": "2026-01-07",
+    "maintenance_cost": 100.0
+  }
+]
