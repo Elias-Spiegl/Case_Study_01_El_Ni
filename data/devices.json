@@ -1,23 +1,16 @@
 [
   {
-    "id": "007",
-    "name": "3D-Drucker",
-    "responsible_person": "eliasspiegl@gmail.com",
-    "next_maintenance": "2025-12-19",
-    "maintenance_cost": 5.0
+    "id": "DEV-002",
+    "name": "test 2",
+    "responsible_person": null,
+    "next_maintenance": "2026-01-08",
+    "maintenance_cost": 0.0
   },
   {
-    "id": "1234",
-    "name": "test123",
+    "id": "DEV-003",
+    "name": "test 245",
     "responsible_person": "eliasspiegl@gmail.com",
-    "next_maintenance": "2026-01-03",
-    "maintenance_cost": 1099.0
-  },
-  {
-    "id": "007",
-    "name": "3D-Drucker Prusa",
-    "responsible_person": "nicod\u00f6rr@gmail.com",
-    "next_maintenance": "2026-01-07",
-    "maintenance_cost": 20.0
+    "next_maintenance": "2026-01-08",
+    "maintenance_cost": 0.0
   }
 ]
