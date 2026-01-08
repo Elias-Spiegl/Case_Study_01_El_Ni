@@ -3,8 +3,23 @@ import pandas as pd
 from datetime import datetime
 
 # Services
-from services.device_service import get_devices, add_device , update_device
-from services.user_service import get_users, add_user
+from services.user_service import (
+    get_users,
+    add_user,
+    update_user,
+    delete_user,
+
+)
+
+from services.device_service import (
+    get_devices,
+    add_device,
+    update_device,
+    delete_device,
+    unassign_devices_from_user
+)
+
+
 
 # -----------------------------------------------------------------------------
 # PAGE CONFIG & NAVIGATION
@@ -40,7 +55,7 @@ if choice == "Startseite":
 # --- GERÄTE-VERWALTUNG --------------------------------------------------------
 elif choice == "Geräte-Verwaltung":
     users = get_users()
-    user_emails = [u["email"] for u in users]
+    user_emails = ["— nicht zugewiesen —"] + [u["email"] for u in users]
 
     # Lookup: Mail → Name (für Anzeige)
     user_lookup = {u["email"]: u["name"] for u in users}
@@ -90,7 +105,7 @@ elif choice == "Geräte-Verwaltung":
             col1, col2 = st.columns(2)
 
             with col1:
-                new_id = st.text_input("Inventarnummer (ID)")
+                st.info("Die Inventar-ID wird automatisch vergeben.")
                 new_name = st.text_input("Gerätename")
 
             with col2:
@@ -107,13 +122,13 @@ elif choice == "Geräte-Verwaltung":
             if submitted:
                 add_device(
                     {
-                        "id": new_id,
                         "name": new_name,
                         "responsible_person": new_resp,
                         "next_maintenance": str(datetime.now().date()),
                         "maintenance_cost": new_cost,
                     }
                 )
+
                 st.success("Gerät wurde gespeichert.")
                 st.rerun()
 
@@ -121,7 +136,7 @@ elif choice == "Geräte-Verwaltung":
     # Gerät bearbeiten
     # -------------------------------------------------------------------------
     with tab3:
-        st.subheader("Gerät bearbeiten")
+        st.subheader("⚙️ Gerät bearbeiten")
 
         devices = get_devices()
 
@@ -137,35 +152,58 @@ elif choice == "Geräte-Verwaltung":
 
             device = device_map[selected_id]
 
+            # -------------------------------
+            # defensiv: Index für Selectbox bestimmen
+            # -------------------------------
+            if device["responsible_person"] in user_emails:
+                selected_index = user_emails.index(device["responsible_person"])
+            else:
+                selected_index = 0  # „nicht zugewiesen“
+
+            # -------------------------------
+            # FORM: Gerät bearbeiten
+            # -------------------------------
             with st.form("edit_device_form"):
                 col1, col2 = st.columns(2)
 
                 with col1:
                     edit_name = st.text_input(
-                        "Gerätename", value=device["name"]
+                        "Gerätename",
+                        value=device["name"]
                     )
 
                 with col2:
                     edit_resp = st.selectbox(
                         "Verantwortliche Person",
                         user_emails,
-                        index=user_emails.index(device["responsible_person"])
+                        index=selected_index
                     )
+
                     edit_cost = st.number_input(
                         "Wartungskosten (€)",
                         min_value=0.0,
                         value=float(device["maintenance_cost"])
                     )
 
-                submitted = st.form_submit_button("Änderungen speichern")
+                save_clicked = st.form_submit_button("Änderungen speichern")
 
-                if submitted:
+            # -------------------------------
+            # Speichern
+            # -------------------------------
+            if save_clicked:
+                if not edit_name:
+                    st.error("Der Gerätename darf nicht leer sein.")
+                else:
+                    responsible_person = (
+                        None if edit_resp == "— nicht zugewiesen —" else edit_resp
+                    )
+
                     update_device(
                         selected_id,
                         {
                             "id": selected_id,
                             "name": edit_name,
-                            "responsible_person": edit_resp,
+                            "responsible_person": responsible_person,
                             "next_maintenance": device["next_maintenance"],
                             "maintenance_cost": edit_cost,
                         }
@@ -173,23 +211,67 @@ elif choice == "Geräte-Verwaltung":
                     st.success("Gerät wurde aktualisiert.")
                     st.rerun()
 
+            # -------------------------------
+            # LÖSCHEN
+            # -------------------------------
+            st.markdown("---")
+
+            with st.container():
+                st.markdown("### 🗑 Dieses Gerät löschen")
+
+                st.warning(
+                    f"Das Gerät **{device['name']} ({selected_id})** wird dauerhaft gelöscht "
+                    "und kann nicht wiederhergestellt werden."
+                )
+
+                delete_confirm = st.checkbox(
+                    "Ich möchte dieses Gerät wirklich löschen.",
+                    key="delete_confirm"
+                )
+
+                col_spacer, col_button = st.columns([3, 1])
+
+                with col_button:
+                    if delete_confirm:
+                        if st.button("🗑 Gerät endgültig löschen"):
+                            success = delete_device(selected_id)
+
+                            if success:
+                                st.success("Gerät wurde gelöscht.")
+                                st.rerun()
+                            else:
+                                st.error("Gerät konnte nicht gelöscht werden.")
+
+# --- NUTZER-VERWALTUNG --------------------------------------------------------
 # --- NUTZER-VERWALTUNG --------------------------------------------------------
 elif choice == "Nutzer-Verwaltung":
     st.title("👥 Nutzer-Verwaltung")
 
-    tab1, tab2 = st.tabs(["Nutzerübersicht", "Nutzer anlegen"])
+    tab1, tab2, tab3 = st.tabs(
+        ["Nutzerübersicht", "Nutzer anlegen", "Nutzer bearbeiten"]
+    )
 
-    # --- Nutzerübersicht ---
+    # -------------------------------------------------------------------------
+    # Nutzerübersicht
+    # -------------------------------------------------------------------------
     with tab1:
         st.subheader("Registrierte Nutzer")
 
         users = get_users()
+
         if users:
-            st.dataframe(pd.DataFrame(users), use_container_width=True)
+            df = pd.DataFrame(users)
+            df = df.rename(columns={
+                "name": "Name",
+                "email": "E-Mail"
+            })
+            st.dataframe(df, use_container_width=True)
         else:
             st.info("Keine Nutzer vorhanden.")
 
-    # --- Nutzer anlegen ---
+    # -------------------------------------------------------------------------
+    # Nutzer anlegen
+    # -------------------------------------------------------------------------
     with tab2:
         st.subheader("Neuen Nutzer anlegen")
 
@@ -199,7 +281,10 @@ elif choice == "Nutzer-Verwaltung":
 
             submitted = st.form_submit_button("Nutzer speichern")
 
-            if submitted:
+        if submitted:
+            if not u_name or not u_email:
+                st.error("Name und E-Mail dürfen nicht leer sein.")
+            else:
                 add_user(
                     {
                         "name": u_name,
@@ -209,6 +294,74 @@ elif choice == "Nutzer-Verwaltung":
                 st.success("Nutzer wurde gespeichert.")
                 st.rerun()
 
+    # -------------------------------------------------------------------------
+    # Nutzer bearbeiten
+    # -------------------------------------------------------------------------
+    with tab3:
+        st.subheader("Nutzer bearbeiten")
+
+        users = get_users()
+
+        if not users:
+            st.info("Keine Nutzer vorhanden.")
+        else:
+            user_map = {u["email"]: u for u in users}
+
+            selected_email = st.selectbox(
+                "Nutzer auswählen (E-Mail)",
+                options=user_map.keys()
+            )
+
+            user = user_map[selected_email]
+
+            # -------------------------------
+            # FORM: Nutzer bearbeiten
+            # -------------------------------
+            with st.form("edit_user_form"):
+                edit_name = st.text_input(
+                    "Name",
+                    value=user["name"]
+                )
+
+                save_clicked = st.form_submit_button("Änderungen speichern")
+
+            if save_clicked:
+                if not edit_name:
+                    st.error("Der Name darf nicht leer sein.")
+                else:
+                    update_user(
+                        selected_email,
+                        {
+                            "email": selected_email,
+                            "name": edit_name,
+                        }
+                    )
+                    st.success("Nutzer wurde aktualisiert.")
+                    st.rerun()
+
+            # -------------------------------
+            # Nutzer löschen
+            # -------------------------------
+            st.markdown("---")
+            st.subheader("⚠️ Nutzer löschen")
+
+            st.warning(
+                f"Der Nutzer **{user['name']} ({selected_email})** wird dauerhaft gelöscht."
+            )
+
+            delete_confirm = st.checkbox(
+                "Ich möchte diesen Nutzer wirklich löschen."
+            )
+
+            if delete_confirm:
+                if st.button("🗑 Nutzer endgültig löschen"):
+                    success = delete_user(selected_email)
+
+                    if success:
+                        st.success("Nutzer wurde gelöscht.")
+                        st.rerun()
+                    else:
+                        st.error("Nutzer konnte nicht gelöscht werden.")
 
 # --- WARTUNGS-MANAGEMENT ------------------------------------------------------
 elif choice == "Wartungs-Management":
