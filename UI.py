@@ -1,9 +1,9 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+from datetime import datetime,date, timedelta
 
 # Services
-from services.user_service import (
+from models.user_service import (
     get_users,
     add_user,
     update_user,
@@ -11,7 +11,7 @@ from services.user_service import (
 
 )
 
-from services.device_service import (
+from models.device_service import (
     get_devices,
     add_device,
     update_device,
@@ -55,7 +55,7 @@ if choice == "Startseite":
 # --- GERÄTE-VERWALTUNG --------------------------------------------------------
 elif choice == "Geräte-Verwaltung":
     users = get_users()
-    user_emails = ["— nicht zugewiesen —"] + [u["email"] for u in users]
+    user_emails = [u["email"] for u in users]
 
     # Lookup: Mail → Name (für Anzeige)
     user_lookup = {u["email"]: u["name"] for u in users}
@@ -101,36 +101,58 @@ elif choice == "Geräte-Verwaltung":
     with tab2:
         st.subheader("Gerät anlegen")
 
-        with st.form("add_device_form"):
-            col1, col2 = st.columns(2)
+        if not users:
+            st.warning("⚠️ Es existieren noch keine Nutzer ⚠️")
+            st.info("Bitte zuerst einen Nutzer anlegen, bevor ein Gerät erstellt werden kann.")
 
-            with col1:
-                st.info("Die Inventar-ID wird automatisch vergeben.")
-                new_name = st.text_input("Gerätename")
+        if users:
+            with st.form("add_device_form"):
+                col1, col2 = st.columns(2)
 
-            with col2:
-                new_resp = st.selectbox(
-                    "Verantwortliche Person",
-                    user_emails
-                )
-                new_cost = st.number_input(
-                    "Wartungskosten (€)", min_value=0.0, step=10.0
-                )
+                with col1:
+                    new_name = st.text_input("Gerätename")
+                    new_resp = st.selectbox(
+                        "Verantwortliche Person",
+                        user_emails
+                    )
+                    st.info("Die Inventar-ID wird automatisch vergeben.")
 
-            submitted = st.form_submit_button("Gerät speichern")
+                with col2:
 
-            if submitted:
-                add_device(
-                    {
-                        "name": new_name,
-                        "responsible_person": new_resp,
-                        "next_maintenance": str(datetime.now().date()),
-                        "maintenance_cost": new_cost,
-                    }
-                )
+                    new_cost = st.number_input(
+                        "Wartungskosten (€)", min_value=0.0, step=10.0
+                    )
+                    next_maintenance = st.date_input(
+                        "Nächste Wartung",
+                        value=date.today() + timedelta(days=180),
+                        min_value=date.today()
+                    )
 
-                st.success("Gerät wurde gespeichert.")
-                st.rerun()
+                submitted = st.form_submit_button("Gerät speichern")
+
+                if submitted:
+                    errors = []
+
+                    if not new_name:
+                        errors.append("Bitte Gerätenamen eingeben.")
+
+                    if new_resp == "":
+                        errors.append("Bitte eine verantwortliche Person auswählen.")
+
+                    if errors:
+                        for e in errors:
+                            st.warning(e)
+                    else:
+                        add_device(
+                            {
+                                "name": new_name,
+                                "responsible_person": new_resp,
+                                "next_maintenance": next_maintenance.isoformat(),
+                                "maintenance_cost": new_cost,
+                            }
+                        )
+                        st.success("Gerät wurde gespeichert.")
+                        st.rerun()
 
     # -------------------------------------------------------------------------
     # Gerät bearbeiten
@@ -171,18 +193,23 @@ elif choice == "Geräte-Verwaltung":
                         "Gerätename",
                         value=device["name"]
                     )
-
-                with col2:
                     edit_resp = st.selectbox(
                         "Verantwortliche Person",
                         user_emails,
                         index=selected_index
                     )
 
+                with col2:
+
                     edit_cost = st.number_input(
                         "Wartungskosten (€)",
                         min_value=0.0,
                         value=float(device["maintenance_cost"])
+                    )
+                    edit_next_maintenance = st.date_input(
+                        "Nächste Wartung",
+                        value=date.today() + timedelta(days=180),
+                        min_value=date.today()
                     )
 
                 save_clicked = st.form_submit_button("Änderungen speichern")
@@ -194,17 +221,14 @@ elif choice == "Geräte-Verwaltung":
                 if not edit_name:
                     st.error("Der Gerätename darf nicht leer sein.")
                 else:
-                    responsible_person = (
-                        None if edit_resp == "— nicht zugewiesen —" else edit_resp
-                    )
-
+                    responsible_person = edit_resp if edit_resp in user_emails else None
                     update_device(
                         selected_id,
                         {
                             "id": selected_id,
                             "name": edit_name,
                             "responsible_person": responsible_person,
-                            "next_maintenance": device["next_maintenance"],
+                            "next_maintenance": edit_next_maintenance.isoformat(),
                             "maintenance_cost": edit_cost,
                         }
                     )
@@ -242,7 +266,6 @@ elif choice == "Geräte-Verwaltung":
                             else:
                                 st.error("Gerät konnte nicht gelöscht werden.")
 
-# --- NUTZER-VERWALTUNG --------------------------------------------------------
 # --- NUTZER-VERWALTUNG --------------------------------------------------------
 elif choice == "Nutzer-Verwaltung":
     st.title("👥 Nutzer-Verwaltung")
@@ -298,7 +321,7 @@ elif choice == "Nutzer-Verwaltung":
     # Nutzer bearbeiten
     # -------------------------------------------------------------------------
     with tab3:
-        st.subheader("Nutzer bearbeiten")
+        st.subheader("⚙️ Nutzer bearbeiten")
 
         users = get_users()
 
@@ -343,7 +366,7 @@ elif choice == "Nutzer-Verwaltung":
             # Nutzer löschen
             # -------------------------------
             st.markdown("---")
-            st.subheader("⚠️ Nutzer löschen")
+            st.subheader("🗑️ Nutzer löschen")
 
             st.warning(
                 f"Der Nutzer **{user['name']} ({selected_email})** wird dauerhaft gelöscht."
