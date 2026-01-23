@@ -1,0 +1,1 @@
+{"users": {"2": {"email": "elias@gmail.com", "name": "Elias"}}, "devices": {"1": {"name": "3D Drucker", "responsible_person": "elias@gmail.com", "next_maintenance": "{TinyDate}:2026-01-30", "maintenance_cost": 10.03, "id": "DEV-001"}}}
