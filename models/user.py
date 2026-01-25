@@ -1,32 +1,29 @@
-from tinydb import Query
+from models.serializable import Serializable
 from database.db import users_table
+from datetime import datetime
 
-class User:
-    db_connector = users_table   # Class Attribute
 
-    def __init__(self, name, email):
+class User(Serializable):
+    db_connector = users_table
+
+    def __init__(
+        self,
+        id: str,
+        name: str,
+        creation_date: datetime | None = None,
+        last_update: datetime | None = None
+    ):
+        super().__init__(id, creation_date, last_update)
         self.name = name
-        self.id = email            # Email = eindeutige ID
 
-    def store_data(self):
-        UserQ = Query()
-        self.db_connector.upsert(
-            {"name": self.name, "email": self.id},
-            UserQ.email == self.id
+    @classmethod
+    def instantiate_from_dict(cls, data: dict):
+        return cls(
+            id=data["id"],
+            name=data["name"],
+            creation_date=data.get("creation_date"),
+            last_update=data.get("last_update"),
         )
-
-    def delete(self):
-        UserQ = Query()
-        self.db_connector.remove(UserQ.email == self.id)
-
-    @classmethod
-    def find_all(cls):
-        return cls.db_connector.all()
-
-    @classmethod
-    def find_by_attribute(cls, attr, value):
-        UserQ = Query()
-        return cls.db_connector.search(getattr(UserQ, attr) == value)
 
     def __str__(self):
         return f"{self.name} ({self.id})"

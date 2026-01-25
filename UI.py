@@ -4,7 +4,7 @@ from datetime import date, timedelta
 
 from models.user import User
 from models.device import Device
-from models.queries import Queries
+from models.queries import UserQueries, DeviceQueries
 
 
 # -----------------------------------------------------------------------------
@@ -12,7 +12,7 @@ from models.queries import Queries
 # -----------------------------------------------------------------------------
 
 st.set_page_config(
-    page_title="Geräte-Verwaltung – Case Study I",
+    page_title="Geräte-Verwaltung – Case Study II",
     layout="wide"
 )
 
@@ -23,7 +23,6 @@ choice = st.sidebar.radio(
         "Startseite",
         "Geräte-Verwaltung",
         "Nutzer-Verwaltung",
-        "Reservierungssystem",
         "Wartungs-Management",
     ],
 )
@@ -34,8 +33,9 @@ choice = st.sidebar.radio(
 
 if choice == "Startseite":
     st.title("Admin-Dashboard Hochschule")
-    st.info("Mockup der Geräte- & Nutzerverwaltung (Case Study I)")
+    st.info("Geräte- & Nutzerverwaltung – Case Study II")
     st.write("Navigation links verwenden.")
+
 
 # -----------------------------------------------------------------------------
 # GERÄTE-VERWALTUNG
@@ -43,9 +43,11 @@ if choice == "Startseite":
 
 elif choice == "Geräte-Verwaltung":
 
-    users = User.find_all()
-    user_emails = [u["email"] for u in users]
-    user_lookup = {u["email"]: u["name"] for u in users}
+    users = UserQueries.find_all()
+    devices = DeviceQueries.find_all()
+
+    user_ids = [u.id for u in users]
+    user_lookup = {u.id: u.name for u in users}
 
     st.title("🛠️ Geräte-Verwaltung")
 
@@ -59,26 +61,18 @@ elif choice == "Geräte-Verwaltung":
     with tab1:
         st.subheader("Inventarliste")
 
-        devices = Device.find_all()
-
         if devices:
-            devices_display = []
+            rows = []
             for d in devices:
-                d_copy = d.copy()
-                email = d.get("responsible_person")
-                d_copy["responsible_person"] = user_lookup.get(email, email)
-                devices_display.append(d_copy)
+                rows.append({
+                    "Inventar-ID": d.id,
+                    "Gerätename": d.device_name,
+                    "Verantwortliche Person": user_lookup.get(d.managed_by_user_id, d.managed_by_user_id),
+                    "Nächste Wartung": getattr(d, "next_maintenance", None),
+                    "Wartungskosten (€)": getattr(d, "maintenance_cost", 0.0)
+                })
 
-            df = pd.DataFrame(devices_display)
-            df = df.rename(columns={
-                "id": "Inventar-ID",
-                "name": "Gerätename",
-                "responsible_person": "Verantwortliche Person",
-                "next_maintenance": "Nächste Wartung",
-                "maintenance_cost": "Wartungskosten (€)"
-            })
-
-            st.dataframe(df, use_container_width=True)
+            st.dataframe(pd.DataFrame(rows), width="stretch")
         else:
             st.info("Keine Geräte vorhanden.")
 
@@ -89,42 +83,36 @@ elif choice == "Geräte-Verwaltung":
         st.subheader("Gerät anlegen")
 
         if not users:
-            st.warning("⚠️ Bitte zuerst einen Nutzer anlegen ⚠️")
-
+            st.warning("Bitte zuerst einen Nutzer anlegen.")
         else:
             with st.form("add_device_form"):
                 col1, col2 = st.columns(2)
 
                 with col1:
-                    new_name = st.text_input("Gerätename")
-                    new_resp = st.selectbox("Verantwortliche Person", user_emails)
-                    st.info("Inventar-ID wird automatisch vergeben")
+                    name = st.text_input("Gerätename")
+                    responsible = st.selectbox("Verantwortliche Person", user_ids)
 
                 with col2:
-                    new_cost = st.number_input("Wartungskosten (€)", min_value=0.0, step=10.0)
+                    cost = st.number_input("Wartungskosten (€)", min_value=0.0, step=10.0)
                     next_maintenance = st.date_input(
                         "Nächste Wartung",
                         value=date.today() + timedelta(days=180),
                         min_value=date.today()
                     )
 
-                submitted = st.form_submit_button("Gerät speichern")
+                submit = st.form_submit_button("Gerät speichern")
 
-                if submitted:
-                    if not new_name:
-                        st.warning("Bitte Gerätenamen eingeben.")
-                    else:
-                        d = Device(
-                            name=new_name,
-                            managed_by_user_id=new_resp
-                        )
-                        # Zusatzfelder direkt anhängen
-                        d.maintenance_cost = new_cost
-                        d.next_maintenance = next_maintenance
-                        d.store_data()
+            if submit:
+                if not name:
+                    st.warning("Bitte Gerätenamen eingeben.")
+                else:
+                    d = Device(name=name, managed_by_user_id=responsible)
+                    d.maintenance_cost = cost
+                    d.next_maintenance = next_maintenance
+                    DeviceQueries.save(d)
 
-                        st.success("Gerät gespeichert.")
-                        st.rerun()
+                    st.success("Gerät gespeichert.")
+                    st.rerun()
 
     # -------------------------------
     # Gerät bearbeiten
@@ -132,65 +120,52 @@ elif choice == "Geräte-Verwaltung":
     with tab3:
         st.subheader("⚙️ Gerät bearbeiten")
 
-        devices = Device.find_all()
-
         if not devices:
             st.info("Keine Geräte vorhanden.")
         else:
-            device_map = {d["id"]: d for d in devices}
-
-            selected_id = st.selectbox(
-                "Gerät auswählen (Inventar-ID)",
-                options=device_map.keys()
-            )
-
+            device_map = {d.id: d for d in devices}
+            selected_id = st.selectbox("Gerät auswählen", device_map.keys())
             device = device_map[selected_id]
-
-            if device["responsible_person"] in user_emails:
-                selected_index = user_emails.index(device["responsible_person"])
-            else:
-                selected_index = 0
 
             with st.form("edit_device_form"):
                 col1, col2 = st.columns(2)
 
                 with col1:
-                    edit_name = st.text_input("Gerätename", value=device["name"])
-                    edit_resp = st.selectbox("Verantwortliche Person", user_emails, index=selected_index)
-
-                with col2:
-                    edit_cost = st.number_input("Wartungskosten (€)", value=float(device.get("maintenance_cost", 0.0)))
-                    edit_next_maintenance = st.date_input(
-                        "Nächste Wartung",
-                        value=device.get("next_maintenance", date.today())
+                    name = st.text_input("Gerätename", value=device.device_name)
+                    responsible = st.selectbox(
+                        "Verantwortliche Person",
+                        user_ids,
+                        index=user_ids.index(device.managed_by_user_id)
                     )
 
-                save_clicked = st.form_submit_button("Änderungen speichern")
+                with col2:
+                    cost = st.number_input(
+                        "Wartungskosten (€)",
+                        value=float(getattr(device, "maintenance_cost", 0.0))
+                    )
+                    next_maintenance = st.date_input(
+                        "Nächste Wartung",
+                        value=getattr(device, "next_maintenance", date.today())
+                    )
 
-            if save_clicked:
-                d = Device(
-                    name=edit_name,
-                    managed_by_user_id=edit_resp,
-                    device_id=selected_id
-                )
-                d.maintenance_cost = edit_cost
-                d.next_maintenance = edit_next_maintenance
-                d.store_data()
+                save = st.form_submit_button("Änderungen speichern")
 
+            if save:
+                device.device_name = name
+                device.managed_by_user_id = responsible
+                device.maintenance_cost = cost
+                device.next_maintenance = next_maintenance
+
+                DeviceQueries.save(device)
                 st.success("Gerät aktualisiert.")
                 st.rerun()
 
-            # -------------------------------
-            # Löschen
-            # -------------------------------
             st.markdown("---")
-            st.warning(f"Gerät **{device['name']} ({selected_id})** wird gelöscht")
+            st.warning(f"Gerät **{device.device_name} ({device.id})** wird gelöscht")
 
-            delete_confirm = st.checkbox("Ich möchte dieses Gerät wirklich löschen")
-
-            if delete_confirm:
+            if st.checkbox("Ich möchte dieses Gerät wirklich löschen"):
                 if st.button("🗑 Gerät endgültig löschen"):
-                    Device("", "", device_id=selected_id).delete()
+                    DeviceQueries.delete(device.id)
                     st.success("Gerät gelöscht.")
                     st.rerun()
 
@@ -203,6 +178,8 @@ elif choice == "Nutzer-Verwaltung":
 
     st.title("👥 Nutzer-Verwaltung")
 
+    users = UserQueries.find_all()
+
     tab1, tab2, tab3 = st.tabs(
         ["Nutzerübersicht", "Nutzer anlegen", "Nutzer bearbeiten"]
     )
@@ -211,12 +188,13 @@ elif choice == "Nutzer-Verwaltung":
     # Übersicht
     # -------------------------------
     with tab1:
-        users = User.find_all()
-
         if users:
-            df = pd.DataFrame(users)
-            df = df.rename(columns={"name": "Name", "email": "E-Mail"})
-            st.dataframe(df, use_container_width=True)
+            st.dataframe(
+                pd.DataFrame(
+                    [{"Name": u.name, "E-Mail": u.id} for u in users]
+                ),
+                width="stretch"
+            )
         else:
             st.info("Keine Nutzer vorhanden.")
 
@@ -225,15 +203,15 @@ elif choice == "Nutzer-Verwaltung":
     # -------------------------------
     with tab2:
         with st.form("add_user_form"):
-            u_name = st.text_input("Name")
-            u_email = st.text_input("E-Mail (ID)")
-            submitted = st.form_submit_button("Nutzer speichern")
+            name = st.text_input("Name")
+            email = st.text_input("E-Mail (ID)")
+            submit = st.form_submit_button("Nutzer speichern")
 
-        if submitted:
-            if not u_name or not u_email:
+        if submit:
+            if not name or not email:
                 st.error("Name und E-Mail dürfen nicht leer sein.")
             else:
-                User(u_name, u_email).store_data()
+                UserQueries.save(User(name, email))
                 st.success("Nutzer gespeichert.")
                 st.rerun()
 
@@ -241,34 +219,29 @@ elif choice == "Nutzer-Verwaltung":
     # Nutzer bearbeiten
     # -------------------------------
     with tab3:
-        users = User.find_all()
-
         if not users:
             st.info("Keine Nutzer vorhanden.")
         else:
-            user_map = {u["email"]: u for u in users}
-
-            selected_email = st.selectbox("Nutzer auswählen", options=user_map.keys())
-            user = user_map[selected_email]
+            user_map = {u.id: u for u in users}
+            selected_id = st.selectbox("Nutzer auswählen", user_map.keys())
+            user = user_map[selected_id]
 
             with st.form("edit_user_form"):
-                edit_name = st.text_input("Name", value=user["name"])
-                save_clicked = st.form_submit_button("Änderungen speichern")
+                name = st.text_input("Name", value=user.name)
+                save = st.form_submit_button("Änderungen speichern")
 
-            if save_clicked:
-                User(edit_name, selected_email).store_data()
+            if save:
+                user.name = name
+                UserQueries.save(user)
                 st.success("Nutzer aktualisiert.")
                 st.rerun()
 
-            # Löschen
             st.markdown("---")
-            st.warning(f"Nutzer **{user['name']} ({selected_email})** wird gelöscht")
+            st.warning(f"Nutzer **{user.name} ({user.id})** wird gelöscht")
 
-            delete_confirm = st.checkbox("Ich möchte diesen Nutzer wirklich löschen")
-
-            if delete_confirm:
+            if st.checkbox("Ich möchte diesen Nutzer wirklich löschen"):
                 if st.button("🗑 Nutzer endgültig löschen"):
-                    User("", selected_email).delete()
+                    UserQueries.delete(user.id)
                     st.success("Nutzer gelöscht.")
                     st.rerun()
 
@@ -281,12 +254,10 @@ elif choice == "Wartungs-Management":
 
     st.title("🔧 Wartungs-Management")
 
-    devices = Device.find_all()
+    devices = DeviceQueries.find_all()
 
-    total_cost = sum(d.get("maintenance_cost", 0) for d in devices)
+    total_cost = sum(getattr(d, "maintenance_cost", 0) for d in devices)
     st.metric("Geschätzte Wartungskosten (Quartal)", f"{total_cost:.2f} €")
 
-    st.subheader("Anstehende Wartungen")
-
     for d in devices:
-        st.write(f"**{d['name']}** – nächste Wartung: {d.get('next_maintenance', 'n/a')}")
+        st.write(f"**{d.device_name}** – nächste Wartung: {getattr(d, 'next_maintenance', 'n/a')}")
