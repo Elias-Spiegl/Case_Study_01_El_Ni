@@ -6,7 +6,6 @@ from models.user import User
 from models.device import Device
 from models.queries import Queries
 
-
 # -----------------------------------------------------------------------------
 # PAGE CONFIG & NAVIGATION
 # -----------------------------------------------------------------------------
@@ -262,16 +261,199 @@ elif choice == "Nutzer-Verwaltung":
 
             # Löschen
             st.markdown("---")
-            st.warning(f"Nutzer **{user['name']} ({selected_email})** wird gelöscht")
+            st.info ("Löschen des Nutzers")
 
             delete_confirm = st.checkbox("Ich möchte diesen Nutzer wirklich löschen")
 
             if delete_confirm:
-                if st.button("🗑 Nutzer endgültig löschen"):
+
+                device_count = Device.count_by_user(selected_email)
+
+                if device_count > 0:
+                    st.error(
+                        f"Dieser Nutzer verwaltet noch {device_count} Gerät(e). "
+                        "Bitte zuerst Geräte neu zuweisen oder löschen."
+                    )
+                else:
                     User("", selected_email).delete()
                     st.success("Nutzer gelöscht.")
                     st.rerun()
 
+
+# -----------------------------------------------------------------------------
+# RESERVIERUNGSSYSTEM
+# -----------------------------------------------------------------------------
+
+elif choice == "Reservierungssystem":
+
+    from models.reservation import Reservation
+
+    st.title("📅 Reservierungssystem")
+
+    users = User.find_all()
+    devices = Device.find_all()
+
+    if not users or not devices:
+        st.info("Bitte zuerst Nutzer und Geräte anlegen.")
+        st.stop()
+
+    # ------------------------
+    # Lookups bauen
+    # ------------------------
+
+    user_emails = [u["email"] for u in users]
+    user_lookup = {u["email"]: u["name"] for u in users}
+
+    device_lookup = {d["id"]: d["name"] for d in devices}
+
+    # Label → ID Map für Geräte-Dropdown
+    device_label_map = {
+        f'{d["name"]} ({d["id"]})': d["id"]
+        for d in devices
+    }
+    device_labels = list(device_label_map.keys())
+
+    # ------------------------
+    # Tabs
+    # ------------------------
+
+    tab1, tab2, tab3 = st.tabs(
+        ["Reservierungs Übersicht", "Neue Reservierung", "Reservierung bearbeiten"]
+    )
+
+    # =========================================================
+    # TAB 1 — Übersicht
+    # =========================================================
+
+    with tab1:
+
+        reservations = Reservation.find_all()
+
+        if reservations:
+            display = []
+
+            for r in reservations:
+                r_copy = r.copy()
+                r_copy["device"] = f'{device_lookup.get(r["device_id"], r["device_id"])} ({r["device_id"]})'
+                r_copy["user"] = user_lookup.get(r["user_email"], r["user_email"])
+                display.append(r_copy)
+
+            df = pd.DataFrame(display)[["id", "device", "user", "start_date", "end_date"]]
+            df = df.rename(columns={
+                "id": "Reservierungs-ID",
+                "device": "Gerät",
+                "user": "Nutzer",
+                "start_date": "Startdatum",
+                "end_date": "Enddatum"
+            })
+
+            st.dataframe(df, use_container_width=True)
+
+        else:
+            st.info("Keine Reservierungen vorhanden.")
+
+    # =========================================================
+    # TAB 2 — Neue Reservierung
+    # =========================================================
+
+    with tab2:
+
+        with st.form("add_reservation"):
+
+            sel_user = st.selectbox("Nutzer", user_emails)
+
+            sel_device_label = st.selectbox("Gerät", device_labels)
+            sel_device = device_label_map[sel_device_label]
+
+            start = st.date_input("Startdatum", date.today())
+            end = st.date_input("Enddatum", date.today() + timedelta(days=1))
+
+            submitted = st.form_submit_button("Reservieren")
+
+        if submitted:
+            if end < start:
+                st.error("Enddatum muss nach Startdatum liegen.")
+            elif not Reservation.is_device_available(sel_device, start, end):
+                st.error("❌ Gerät ist in diesem Zeitraum bereits reserviert.")
+            else:
+                Reservation(sel_device, sel_user, start, end).store_data()
+                st.success("✅ Reservierung gespeichert")
+                st.rerun()
+
+    # =========================================================
+    # TAB 3 — Bearbeiten / Löschen
+    # =========================================================
+
+    with tab3:
+
+        reservations = Reservation.find_all()
+
+        if not reservations:
+            st.info("Keine Reservierungen vorhanden.")
+            st.stop()
+
+        res_map = {r["id"]: r for r in reservations}
+
+        selected_res_id = st.selectbox("Reservierung auswählen", res_map.keys())
+        res = res_map[selected_res_id]
+
+        # Aktuelles Geräte-Label finden
+        current_device_label = next(
+            label for label, did in device_label_map.items()
+            if did == res["device_id"]
+        )
+
+        with st.form("edit_res_form"):
+
+            edit_device_label = st.selectbox(
+                "Gerät",
+                device_labels,
+                index=device_labels.index(current_device_label)
+            )
+            edit_device = device_label_map[edit_device_label]
+
+            edit_user = st.selectbox(
+                "Nutzer",
+                user_emails,
+                index=user_emails.index(res["user_email"])
+            )
+
+            edit_start = st.date_input("Startdatum", res["start_date"])
+            edit_end = st.date_input("Enddatum", res["end_date"])
+
+            save = st.form_submit_button("Änderungen speichern")
+
+        # -------- speichern --------
+        if save:
+            if edit_end < edit_start:
+                st.error("Enddatum muss nach Startdatum liegen.")
+            elif not Reservation.is_device_available(
+                edit_device, edit_start, edit_end, ignore_res_id=selected_res_id
+            ):
+                st.error("❌ Gerät ist in diesem Zeitraum bereits reserviert.")
+            else:
+                Reservation(
+                    edit_device,
+                    edit_user,
+                    edit_start,
+                    edit_end,
+                    reservation_id=selected_res_id
+                ).store_data()
+
+                st.success("Reservierung aktualisiert.")
+                st.rerun()
+
+        # -------- löschen --------
+        st.markdown("---")
+        st.subheader("🗑 Reservierung löschen")
+
+        del_confirm = st.checkbox("Ich möchte diese Reservierung wirklich löschen")
+
+        if del_confirm:
+            if st.button("Reservierung endgültig löschen"):
+                Reservation(None, None, None, None, reservation_id=selected_res_id).delete()
+                st.success("Reservierung gelöscht.")
+                st.rerun()
 
 # -----------------------------------------------------------------------------
 # WARTUNGS-MANAGEMENT
@@ -282,11 +464,93 @@ elif choice == "Wartungs-Management":
     st.title("🔧 Wartungs-Management")
 
     devices = Device.find_all()
+    users = User.find_all()
 
-    total_cost = sum(d.get("maintenance_cost", 0) for d in devices)
-    st.metric("Geschätzte Wartungskosten (Quartal)", f"{total_cost:.2f} €")
+    if not devices:
+        st.info("Keine Geräte vorhanden.")
+        st.stop()
 
-    st.subheader("Anstehende Wartungen")
+    # Lookup für Usernamen
+    user_lookup = {u["email"]: u["name"] for u in users}
+
+    today = date.today()
+
+    display = []
+    total_cost = 0.0
+    due_soon_count = 0
+    overdue_count = 0
 
     for d in devices:
-        st.write(f"**{d['name']}** – nächste Wartung: {d.get('next_maintenance', 'n/a')}")
+        d_copy = d.copy()
+
+        # Verantwortliche Person schöner anzeigen
+        email = d.get("responsible_person")
+        d_copy["responsible_person"] = user_lookup.get(email, email)
+
+        # --- Wartungsdaten sicher holen ---
+        next_maint = d.get("next_maintenance", None)
+        cost = d.get("maintenance_cost", 0.0)
+
+        # Falls keine Wartung gesetzt → Defaultwerte
+        if next_maint is None:
+            next_maint_display = "n/a"
+            status = "n/a"
+        else:
+            next_maint_display = next_maint
+
+            # Status bestimmen
+            if next_maint < today:
+                status = "🔴 Überfällig"
+                overdue_count += 1
+            elif next_maint <= today + timedelta(days=30):
+                status = "🟠 Bald fällig"
+                due_soon_count += 1
+            else:
+                status = "🟢 OK"
+
+        # Werte sauber in Kopie setzen
+        d_copy["next_maintenance"] = next_maint_display
+        d_copy["maintenance_cost"] = cost
+        d_copy["status"] = status
+
+        total_cost += cost
+        display.append(d_copy)
+
+    # -------------------------------
+    # Kennzahlen oben
+    # -------------------------------
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Gesamte Wartungskosten", f"{total_cost:.2f} €")
+    col2.metric("Bald fällige Wartungen", due_soon_count)
+    col3.metric("Überfällige Wartungen", overdue_count)
+
+    st.markdown("---")
+
+    # -------------------------------
+    # Tabelle
+    # -------------------------------
+
+    df = pd.DataFrame(display)
+
+    df = df.rename(columns={
+        "id": "Inventar-ID",
+        "name": "Gerätename",
+        "responsible_person": "Verantwortliche Person",
+        "next_maintenance": "Nächste Wartung",
+        "maintenance_cost": "Wartungskosten (€)",
+        "status": "Status"
+    })
+
+    df = df[
+        [
+            "Inventar-ID",
+            "Gerätename",
+            "Verantwortliche Person",
+            "Nächste Wartung",
+            "Wartungskosten (€)",
+            "Status"
+        ]
+    ]
+
+    st.dataframe(df, use_container_width=True)

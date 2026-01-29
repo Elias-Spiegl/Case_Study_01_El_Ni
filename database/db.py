@@ -10,3 +10,7 @@ db = TinyDB("database/database.json", storage=serialization)
 
 users_table = db.table("users")
 devices_table = db.table("devices")
+reservations_table = db.table("reservations")
+maintenances_table = db.table("maintenances")
+
+

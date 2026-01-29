@@ -21,7 +21,7 @@ class Device:
     def store_data(self):
         DeviceQ = Query()
 
-        # Auto-ID wie bisher DEV-001, DEV-002 ...
+        # Auto-ID DEV-001 ...
         if self.id is None:
             all_devices = self.db_connector.all()
             numbers = []
@@ -41,7 +41,11 @@ class Device:
                 "creation_date": self.creation_date,
                 "last_update": datetime.now(),
                 "is_active": self.is_active,
-                "end_of_life": self.end_of_life
+                "end_of_life": self.end_of_life,
+
+                # >>> Wartungsfelder sauber mitspeichern <<<
+                "maintenance_cost": getattr(self, "maintenance_cost", 0.0),
+                "next_maintenance": getattr(self, "next_maintenance", None)
             },
             DeviceQ.id == self.id
         )
@@ -62,3 +66,9 @@ class Device:
     def set_managed_by_user_id(self, user_id):
         self.managed_by_user_id = user_id
         self.store_data()
+
+    @classmethod
+    def count_by_user(cls, user_email):
+        DeviceQ = Query()
+        return len(cls.db_connector.search(DeviceQ.responsible_person == user_email))
+
