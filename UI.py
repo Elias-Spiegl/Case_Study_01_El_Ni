@@ -32,9 +32,82 @@ choice = st.sidebar.radio(
 # -----------------------------------------------------------------------------
 
 if choice == "Startseite":
-    st.title("Admin-Dashboard Hochschule")
-    st.info("Mockup der Geräte- & Nutzerverwaltung (Case Study I)")
-    st.write("Navigation links verwenden.")
+
+    st.title("🏫 Geräte- & Ressourcenverwaltung")
+
+    st.write(
+        "Willkommen im Verwaltungssystem der Hochschule. "
+        "Hier werden Geräte, Nutzer, Reservierungen und Wartungsintervalle zentral verwaltet."
+    )
+
+    st.markdown("---")
+
+    # Daten holen
+    devices = Device.find_all()
+    users = User.find_all()
+
+    # Falls Reservation-Modul existiert
+    try:
+        from models.reservation import Reservation
+        reservations = Reservation.find_all()
+    except:
+        reservations = []
+
+    # Kennzahlen berechnen
+    num_devices = len(devices)
+    num_users = len(users)
+    num_reservations = len(reservations)
+
+    # Wartungsstatus zählen
+    today = date.today()
+    due_soon = 0
+    overdue = 0
+
+    for d in devices:
+        next_maint = d.get("next_maintenance", None)
+        if next_maint:
+            if next_maint < today:
+                overdue += 1
+            elif next_maint <= today + timedelta(days=30):
+                due_soon += 1
+
+    # -------------------------------
+    # KPI Karten
+    # -------------------------------
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    col1.metric("👤 Nutzer", num_users)
+    col2.metric("🛠 Geräte", num_devices)
+    col3.metric("📅 Reservierungen", num_reservations)
+    col4.metric("🔧 Bald fällige Wartungen", due_soon)
+
+    st.markdown("---")
+
+    # -------------------------------
+    # Systemstatus
+    # -------------------------------
+
+    st.subheader("📊 Systemstatus")
+
+    if overdue > 0:
+        st.error(f"🔴 {overdue} Geräte haben überfällige Wartungen!")
+    elif due_soon > 0:
+        st.warning(f"🟠 {due_soon} Geräte haben bald fällige Wartungen.")
+    else:
+        st.success("🟢 Alle Geräte sind im Wartungsintervall.")
+
+    if num_devices == 0 or num_users == 0:
+        st.info("Bitte zuerst Nutzer und Geräte anlegen, um das System zu verwenden.")
+
+    st.markdown("---")
+
+    st.write(
+        "➡️ Nutze die Navigation links, um Geräte anzulegen, "
+        "Nutzer zu verwalten, Reservierungen durchzuführen "
+        "oder Wartungsintervalle zu überwachen."
+    )
+
 
 # -----------------------------------------------------------------------------
 # GERÄTE-VERWALTUNG
